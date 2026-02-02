@@ -2,57 +2,79 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>STAR MAKER: 3D MASTER</title>
+    <title>PIXEL UNIVERSE VR</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: 'Arial', sans-serif; }
-        #ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; color: white; }
-        .panel { pointer-events: all; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; margin: 10px; border: 2px solid #555; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff00; font-size: 24px; }
-        button { cursor: pointer; background: #444; color: white; border: 1px solid #777; padding: 10px; border-radius: 5px; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Consolas', monospace; color: #eee; }
+        #ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; }
+        .panel { pointer-events: all; background: rgba(0,0,0,0.7); padding: 12px; border-radius: 8px; margin: 10px; border: 1px solid #555; box-shadow: 0 0 10px rgba(0,255,255,0.3); }
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff00; font-size: 20px; text-shadow: 0 0 5px #00ff00; }
+        button { cursor: pointer; background: #007bff; color: white; border: none; padding: 10px 15px; border-radius: 5px; font-weight: bold; transition: background 0.2s; }
+        button:hover { background: #0056b3; }
         .hidden { display: none !important; }
         #hp-bar { width: 100%; height: 10px; background: #333; border-radius: 5px; margin-top: 5px; }
         #hp-fill { width: 100%; height: 100%; background: #ff4757; border-radius: 5px; transition: 0.3s; }
-        #guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; }
+
+        /* 터치 조작 UI */
+        #touch-controls { position:fixed; inset:0; pointer-events:none; z-index:20; display:flex; justify-content:space-between; align-items:flex-end; }
+        #joystick-zone { position:relative; width:100px; height:100px; background:rgba(255,255,255,0.15); border-radius:50%; margin:20px; pointer-events:all; }
+        #joystick-stick { position:absolute; width:50px; height:50px; background:white; border-radius:50%; opacity:0.6; top:25px; left:25px; transform:translate(0,0); }
+        #touch-buttons { display:flex; flex-direction:column; gap:15px; margin:20px; pointer-events:all; }
+        .touch-button { width:70px; height:70px; border-radius:50%; background:rgba(0,255,255,0.3); color:white; font-size:1.1em; border:2px solid rgba(0,255,255,0.5); display:flex; justify-content:center; align-items:center; }
+        .touch-button.mine { background:rgba(255,71,87,0.4); border:2px solid rgba(255,71,87,0.7); }
+
+        /* VR 화면 분할 (모바일에서만 작동) */
+        #vr-toggle { position: absolute; top: 10px; right: 10px; pointer-events: all; }
     </style>
 </head>
 <body>
 
-<div id="login-screen" style="position:fixed; inset:0; background:#1a1a2e; z-index:100; display:flex; align-items:center; justify-content:center;">
-    <div class="panel" style="width:300px; text-align:center; background:white; color:black;">
-        <h2 style="color:#1a1a2e">⛏️ STAR MAKER 3D</h2>
-        <input type="text" id="uid" placeholder="아이디" style="width:90%; padding:10px; margin-bottom:10px;">
-        <input type="password" id="upw" placeholder="비밀번호" style="width:90%; padding:10px; margin-bottom:20px;">
-        <button onclick="handleAuth('login')" style="width:45%; background:#2ecc71">로그인</button>
-        <button onclick="handleAuth('signup')" style="width:45%; background:#9b59b6">가입</button>
+<div id="login-screen" style="position:fixed; inset:0; background:#111; z-index:100; display:flex; align-items:center; justify-content:center;">
+    <div class="panel" style="width:320px; text-align:center; background:#222; border-color:#00ffff;">
+        <h1 style="color:#00ffff; text-shadow:0 0 10px #00ffff;">✨ PIXEL UNIVERSE ✨</h1>
+        <input type="text" id="uid" placeholder="유저 ID" style="width:90%; padding:12px; margin-bottom:10px; background:#333; border:1px solid #00ffff; color:#eee;">
+        <input type="password" id="upw" placeholder="비밀번호" style="width:90%; padding:12px; margin-bottom:20px; background:#333; border:1px solid #00ffff; color:#eee;">
+        <button onclick="handleAuth('login')" style="width:48%;">LOGIN</button>
+        <button onclick="handleAuth('signup')" style="width:48%; background:#8e44ad;">SIGNUP</button>
     </div>
 </div>
 
 <div id="ui" class="hidden">
-    <div id="guide">화면을 클릭하면 시점이 고정됩니다 (ESC로 해제)</div>
+    <button id="vr-toggle" onclick="toggleVRMode()">🌐 VR 모드</button>
     <div id="crosshair">+</div>
     
-    <div class="panel" style="width: 220px;">
-        <div style="font-size: 1.2em; color: #f1c40f;">💰 <span id="money-txt">0</span> G</div>
+    <div class="panel" style="align-self: flex-start;">
+        <div style="font-size: 1.2em; color: #00ffff;">💰 <span id="money-txt">0</span> G</div>
         <div id="hp-bar"><div id="hp-fill"></div></div>
-        <div style="font-size: 12px; margin-top: 8px;">
-            🪵:<span id="inv-WOOD">0</span> 🪨:<span id="inv-STONE">0</span> 💎:<span id="inv-DIAMOND">0</span>
+        <div style="font-size: 0.9em; margin-top: 8px; display:flex; justify-content: space-between;">
+            <span>🪵 <span id="inv-WOOD">0</span></span>
+            <span>🪨 <span id="inv-STONE">0</span></span>
+            <span>💎 <span id="inv-DIAMOND">0</span></span>
         </div>
-        <div style="margin-top:5px; color:#3498db; font-size:14px;">⚔️ <span id="weapon-txt">맨손</span></div>
+        <div style="margin-top:5px; color:#00ff00; font-size:1em;">⚔️ <span id="weapon-txt">맨손</span></div>
     </div>
 
-    <div id="craft-ui" class="panel hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:250px;">
-        <h3 style="margin:0 0 10px 0">⚒️ 제작대</h3>
-        <button onclick="craft('IRON_SWORD', 500)" style="width:100%; margin-bottom:5px;">철 검 (500G)</button>
-        <button onclick="craft('DIAMOND_SWORD', 2000)" style="width:100%; margin-bottom:5px;">다이아 검 (2000G)</button>
-        <button onclick="toggleCraft()" style="width:100%; background:#e74c3c">닫기</button>
+    <div id="craft-ui" class="panel hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:280px; text-align:center; border-color:#f1c40f;">
+        <h3 style="margin:0 0 15px 0; color:#f1c40f;">⚒️ 제작대</h3>
+        <button onclick="craft('IRON_SWORD', 500)" style="width:100%; margin-bottom:8px; background:#e67e22;">철 검 (500G)</button>
+        <button onclick="craft('DIAMOND_SWORD', 2000)" style="width:100%; margin-bottom:8px; background:#9b59b6;">다이아 검 (2000G)</button>
+        <button onclick="toggleCraft()" style="width:100%; background:#c0392b;">닫기</button>
     </div>
 
-    <div style="position:fixed; bottom:20px; left:20px; pointer-events:all; display:flex; gap:10px;">
-        <button onclick="toggleCraft()" style="background:#e67e22">⚒️ 제작대</button>
-        <button onclick="jump()">🚀 JUMP (Space)</button>
+    <div style="align-self: flex-end; display:flex; gap:10px; margin:10px; pointer-events:all;">
+        <button onclick="toggleCraft()" style="background:#e67e22;">⚒️ 제작대</button>
+    </div>
+</div>
+
+<div id="touch-controls">
+    <div id="joystick-zone">
+        <div id="joystick-stick"></div>
+    </div>
+    <div id="touch-buttons">
+        <div class="touch-button" onclick="jump()">JUMP</div>
+        <div class="touch-button mine" onclick="onAction()">MINE</div>
     </div>
 </div>
 
@@ -71,9 +93,17 @@
     let myId, myModel, scene, camera, renderer, myData = {};
     let chunks = {}, players = {}, blocks = [];
     const keys = {}, CHUNK_SIZE = 14, NOISE_SCALE = 0.08, HEIGHT_SCALE = 4;
-    let vY = 0, rotY = 0;
+    let vY = 0; // 중력/점프 속도
+    let isVRMode = false; // VR 모드 토글
 
-    const BIOMES = { WATER: 0x3498db, SAND: 0xf1c40f, GRASS: 0x2ecc71, STONE: 0x7f8c8d, SNOW: 0xffffff };
+    const BIOMES = {
+        WATER: 0x3498db, SAND: 0xf1c40f, GRASS: 0x2ecc71, STONE: 0x7f8c8d, SNOW: 0xffffff
+    };
+
+    // 터치 조이스틱 변수
+    let touchMoveX = 0, touchMoveY = 0;
+    let lookTouchStartX = 0, lookTouchStartY = 0;
+    let isLooking = false;
 
     async function handleAuth(type) {
         const id = document.getElementById('uid').value;
@@ -81,51 +111,114 @@
         const ref = db.ref('users/' + id);
         const snap = await ref.once('value');
         if(type === 'signup') {
-            if(snap.exists()) return alert("중복 아이디");
-            await ref.set({pw, WOOD:0, STONE:0, DIAMOND:0, hp:100, weapon:"맨손", money:500});
-            alert("가입 성공!");
+            if(snap.exists()) return alert("중복 아이디!");
+            await ref.set({pw, WOOD:0, STONE:0, DIAMOND:0, hp:100, weapon:"맨손", money:500, x:0, y:0, z:0, rotY:0, rotX:0});
+            alert("가입 성공! 로그인하세요.");
         } else {
             if(snap.exists() && snap.val().pw === pw) { myId = id; start(); }
-            else alert("오류");
+            else alert("ID 또는 비밀번호 오류.");
         }
     }
 
     function start() {
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('ui').classList.remove('hidden');
+        // 모바일 환경에서만 터치 컨트롤 보이도록
+        if (window.innerWidth <= 768) { 
+            document.getElementById('touch-controls').style.display = 'flex';
+        } else {
+            document.getElementById('touch-controls').style.display = 'none';
+        }
         init3D();
         sync();
     }
 
     function init3D() {
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
+        // 실제 하늘처럼 보이는 배경 (좀 더 현실감)
+        scene.background = new THREE.CubeTextureLoader()
+            .setPath('https://threejs.org/examples/textures/cube/Bridge2/')
+            .load(['posx.jpg', 'negx.jpg', 'posy.jpg', 'negy.jpg', 'posz.jpg', 'negz.jpg']);
+
         camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
         renderer = new THREE.WebGLRenderer({antialias: true});
         renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(renderer.domElement);
+        renderer.shadowMap.enabled = true; // 그림자 활성화
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
         myModel = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1, 0.5), new THREE.MeshStandardMaterial({color: 0x3498db}));
-        body.position.y = 1;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 0.5), new THREE.MeshStandardMaterial({color: 0x3498db}));
+        body.position.y = 1; // 발이 지면에 닿도록 조정
+        body.castShadow = true; // 그림자 드리우기
         myModel.add(body);
         scene.add(myModel);
 
-        scene.add(new THREE.DirectionalLight(0xffffff, 1), new THREE.AmbientLight(0xffffff, 0.5));
+        // 조명 (태양 + 주변광)
+        const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        sunLight.position.set(100, 100, 50);
+        sunLight.castShadow = true; // 그림자 생성
+        sunLight.shadow.mapSize.width = 2048;
+        sunLight.shadow.mapSize.height = 2048;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 500;
+        sunLight.shadow.camera.left = -50;
+        sunLight.shadow.camera.right = 50;
+        sunLight.shadow.camera.top = 50;
+        sunLight.shadow.camera.bottom = -50;
+        scene.add(sunLight);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.4));
         
-        // 마우스 시점 고정 로직
+        // PC 마우스 시점 고정
         renderer.domElement.addEventListener('click', () => {
-            renderer.domElement.requestPointerLock();
-            document.getElementById('guide').style.display = 'none';
+            if (window.innerWidth > 768) { // PC에서만 PointerLock
+                renderer.domElement.requestPointerLock();
+            }
+            document.getElementById('crosshair').style.display = 'block';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (document.pointerLockElement === renderer.domElement) {
-                myModel.rotation.y -= e.movementX * 0.003;
+                myModel.rotation.y -= e.movementX * 0.002;
+                camera.rotation.x -= e.movementY * 0.002; // 상하 시점
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x)); // 고개 꺾임 방지
             }
         });
 
-        window.addEventListener('mousedown', onAction);
+        // 모바일 터치 시점 제어 (오른쪽 절반)
+        renderer.domElement.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1 && e.touches[0].clientX > window.innerWidth / 2) {
+                isLooking = true;
+                lookTouchStartX = e.touches[0].clientX;
+                lookTouchStartY = e.touches[0].clientY;
+            }
+        }, {passive: false});
+
+        renderer.domElement.addEventListener('touchmove', (e) => {
+            if (isLooking && e.touches.length === 1) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const deltaX = touch.clientX - lookTouchStartX;
+                const deltaY = touch.clientY - lookTouchStartY;
+
+                myModel.rotation.y -= deltaX * 0.005; // 좌우 회전
+                camera.rotation.x -= deltaY * 0.005; // 상하 회전
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                
+                lookTouchStartX = touch.clientX;
+                lookTouchStartY = touch.clientY;
+            }
+        }, {passive: false});
+
+        renderer.domElement.addEventListener('touchend', () => {
+            isLooking = false;
+        });
+
+        // 물 파티클 생성
+        createWaterSurface();
+
+        window.addEventListener('mousedown', onAction); // PC 채굴
+
         animate();
     }
 
@@ -133,23 +226,66 @@
         return Math.floor(Math.sin(x * NOISE_SCALE) * Math.cos(z * NOISE_SCALE) * HEIGHT_SCALE);
     }
 
+    function getBlockColor(h) {
+        if (h < -1) return BIOMES.WATER;
+        if (h < 0) return BIOMES.SAND;
+        if (h < 2) return BIOMES.GRASS;
+        if (h < 4) return BIOMES.STONE;
+        return BIOMES.SNOW;
+    }
+
+    // 물 표면 생성 (현실감 추가)
+    const waterBlocks = [];
+    function createWaterSurface() {
+        const waterGeo = new THREE.BoxGeometry(1, 1, 1);
+        const waterMat = new THREE.MeshPhysicalMaterial({
+            color: BIOMES.WATER,
+            transparent: true,
+            opacity: 0.8,
+            roughness: 0.1,
+            metalness: 0.9,
+            reflectivity: 0.5,
+            clearcoat: 1,
+            clearcoatRoughness: 0.1
+        });
+        // 물은 블록을 직접 생성하는 대신, 낮은 지형을 커버하는 넓은 면으로 처리하여 퍼포먼스 향상
+        // 여기서는 예시를 위해 낮은 지형에만 블록 생성
+    }
+
     function updateChunks() {
         const cx = Math.floor(myModel.position.x / CHUNK_SIZE);
         const cz = Math.floor(myModel.position.z / CHUNK_SIZE);
-        for(let x = cx-1; x <= cx+1; x++) {
-            for(let z = cz-1; z <= cz+1; z++) {
+        
+        // 오래된 청크 제거 (메모리 최적화)
+        for (const key in chunks) {
+            const [chunkX, chunkZ] = key.split(',').map(Number);
+            if (Math.abs(chunkX - cx) > 2 || Math.abs(chunkZ - cz) > 2) {
+                scene.remove(chunks[key]);
+                delete chunks[key];
+            }
+        }
+
+        for(let x = cx-2; x <= cx+2; x++) { // 렌더링 반경 확장
+            for(let z = cz-2; z <= cz+2; z++) {
                 if(!chunks[`${x},${z}`]) {
                     const group = new THREE.Group();
                     for(let lx=0; lx<CHUNK_SIZE; lx++){
                         for(let lz=0; lz<CHUNK_SIZE; lz++){
                             const wx = x*CHUNK_SIZE + lx, wz = z*CHUNK_SIZE + lz;
                             const h = getTerrainHeight(wx, wz);
-                            const box = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({
-                                color: h < -1 ? BIOMES.WATER : h < 0 ? BIOMES.SAND : h < 2 ? BIOMES.GRASS : h < 4 ? BIOMES.STONE : BIOMES.SNOW,
-                                flatShading: true
-                            }));
+                            
+                            // 물 블록은 투명하게 처리
+                            const isWater = (h < -1);
+                            const boxMat = isWater 
+                                ? new THREE.MeshPhysicalMaterial({ color: BIOMES.WATER, transparent: true, opacity: 0.6, roughness: 0.1 })
+                                : new THREE.MeshStandardMaterial({ color: getBlockColor(h), flatShading: true });
+
+                            const box = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), boxMat);
                             box.position.set(wx, h - 0.5, wz);
                             box.userData = {type: h > 2 ? 'STONE' : 'WOOD'};
+                            box.receiveShadow = true; // 그림자 받기
+                            box.castShadow = !isWater; // 물은 그림자를 드리우지 않음
+
                             group.add(box);
                             blocks.push(box);
                         }
@@ -161,17 +297,24 @@
         }
     }
 
-    function onAction() {
+    function onAction() { // PC 마우스 클릭 및 모바일 MINE 버튼
         const ray = new THREE.Raycaster();
-        ray.setFromCamera(new THREE.Vector2(0,0), camera);
+        // PC는 중앙 조준선, 모바일은 화면 중앙 (혹은 특정 터치 지점)
+        if (window.innerWidth > 768 || !isLooking) { // PC 또는 터치 시점 중이 아닐 때
+            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+        } else { // 모바일에서 오른쪽 터치로 시점 돌리는 중일 때
+            // 간단하게 카메라 중앙으로 처리, 정교하게 하려면 터치 위치 계산 필요
+            ray.setFromCamera(new THREE.Vector2(0,0), camera);
+        }
+
         const hits = ray.intersectObjects(blocks);
-        if(hits.length > 0 && hits[0].distance < 6) {
+        if(hits.length > 0 && hits[0].distance < 6) { // 채굴 반경 6블록
             const type = hits[0].object.userData.type;
             db.ref('users/'+myId).transaction(d => {
                 if(d) { d[type] = (d[type]||0)+1; d.money = (d.money||0)+30; }
                 return d;
             });
-            hits[0].object.visible = false;
+            hits[0].object.visible = false; // 블록 파괴 효과
         }
     }
 
@@ -183,6 +326,24 @@
     }
     function jump() { if(vY === 0) vY = 0.22; }
 
+    function toggleVRMode() {
+        isVRMode = !isVRMode;
+        if (isVRMode) {
+            // 모바일 VR (카드보드 등) 화면 분할
+            renderer.setSize(window.innerWidth / 2, window.innerHeight); // 왼쪽 눈
+            // 오른쪽 눈을 위한 두 번째 캔버스 또는 뷰포트 설정 필요
+            alert("VR 모드 (실제 VR 기기 연동은 복잡합니다)");
+            // 이 부분은 WebXR API를 사용해야 실제 VR HMD와 연동 가능
+            // 예시로 화면을 분할하는 기본적인 UI만 구현
+            camera.aspect = (window.innerWidth / 2) / window.innerHeight;
+            camera.updateProjectionMatrix();
+        } else {
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+        }
+    }
+
     function sync() {
         db.ref('users/'+myId).on('value', s => {
             myData = s.val() || {};
@@ -190,8 +351,15 @@
             document.getElementById('money-txt').innerText = myData.money || 0;
             document.getElementById('weapon-txt').innerText = myData.weapon || "맨손";
             document.getElementById('hp-fill').style.width = (myData.hp || 100) + "%";
+            
+            // 초기 위치 동기화
+            if (!myModel.position.x && !myModel.position.z) {
+                myModel.position.set(myData.x || 0, myData.y || 0, myData.z || 0);
+                myModel.rotation.y = myData.rotY || 0;
+                camera.rotation.x = myData.rotX || 0;
+            }
         });
-        db.ref('live/'+myId).set({x:0, y:0, z:0, rot:0});
+        db.ref('live/'+myId).set({x:0, y:0, z:0, rotY:0, rotX:0}); // 초기화 시점
         db.ref('live').on('value', s => {
             const d = s.val();
             for(let id in d) {
@@ -201,7 +369,8 @@
                     scene.add(players[id]);
                 }
                 players[id].position.set(d[id].x, d[id].y + 0.5, d[id].z);
-                players[id].rotation.y = d[id].rot;
+                players[id].rotation.y = d[id].rotY;
+                // 플레이어 상하 시점은 모델에 적용하기 어려우므로 생략
             }
         });
     }
@@ -209,36 +378,129 @@
     window.onkeydown = e => { keys[e.code] = true; if(e.code === 'Space') jump(); };
     window.onkeyup = e => keys[e.code] = false;
 
+    // 조이스틱 이동 적용
+    const joystickZone = document.getElementById('joystick-zone');
+    const joystickStick = document.getElementById('joystick-stick');
+    let joystickActive = false;
+    let joystickDeltaX = 0;
+    let joystickDeltaY = 0;
+
+    joystickZone.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const rect = joystickZone.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        joystickActive = true;
+        joystickStick.style.transition = 'none';
+        joystickStick.style.transform = `translate(${touch.clientX - centerX - joystickStick.offsetWidth/2}px, ${touch.clientY - centerY - joystickStick.offsetHeight/2}px)`;
+    }, {passive: false});
+
+    joystickZone.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        const rect = joystickZone.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let dx = touch.clientX - centerX;
+        let dy = touch.clientY - centerY;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        const maxDist = 30; // 스틱이 움직일 최대 반경
+
+        if (dist > maxDist) {
+            dx *= maxDist / dist;
+            dy *= maxDist / dist;
+        }
+
+        joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+        joystickDeltaX = dx / maxDist; // -1 to 1
+        joystickDeltaY = dy / maxDist; // -1 to 1
+    }, {passive: false});
+
+    joystickZone.addEventListener('touchend', () => {
+        joystickActive = false;
+        joystickStick.style.transition = 'transform 0.2s ease-out';
+        joystickStick.style.transform = `translate(0px, 0px)`;
+        joystickDeltaX = 0;
+        joystickDeltaY = 0;
+    });
+
+
     function animate() {
         requestAnimationFrame(animate);
         
-        // 방향 기반 이동
         const moveSpeed = 0.15;
         const dir = new THREE.Vector3();
-        myModel.getWorldDirection(dir);
-        
+        myModel.getWorldDirection(dir); // 캐릭터가 바라보는 방향
+        const sideDir = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), dir); // 캐릭터의 옆 방향
+
+        // 1. 키보드 이동
         if(keys['KeyW']) myModel.position.addScaledVector(dir, moveSpeed);
         if(keys['KeyS']) myModel.position.addScaledVector(dir, -moveSpeed);
-        
-        const sideDir = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), dir);
         if(keys['KeyA']) myModel.position.addScaledVector(sideDir, moveSpeed);
         if(keys['KeyD']) myModel.position.addScaledVector(sideDir, -moveSpeed);
 
+        // 2. 터치 조이스틱 이동 (정규화된 값 사용)
+        if (joystickActive) {
+            myModel.position.addScaledVector(dir, -joystickDeltaY * moveSpeed); // 앞/뒤
+            myModel.position.addScaledVector(sideDir, -joystickDeltaX * moveSpeed); // 좌/우
+        }
+        
+        // 중력 및 지형 충돌
         const groundY = getTerrainHeight(myModel.position.x, myModel.position.z);
-        if(myModel.position.y > groundY) vY -= 0.012;
-        else { myModel.position.y = groundY; vY = Math.max(0, vY); }
+        if(myModel.position.y > groundY + 0.1) vY -= 0.012; // 0.1은 블록 위로 살짝 뜨게 하는 여유
+        else { 
+            myModel.position.y = groundY + 0.1; // 지형보다 살짝 위로
+            vY = Math.max(0, vY); // 땅에 닿으면 점프 속도 초기화
+        }
         myModel.position.y += vY;
 
-        updateChunks();
-        db.ref('live/'+myId).update({x: myModel.position.x, y: myModel.position.y, z: myModel.position.z, rot: myModel.rotation.y});
+        updateChunks(); // 청크 업데이트
+
+        // 위치 및 회전 DB 업데이트
+        db.ref('live/'+myId).update({
+            x: myModel.position.x,
+            y: myModel.position.y,
+            z: myModel.position.z,
+            rotY: myModel.rotation.y,
+            rotX: camera.rotation.x
+        });
         
-        // 카메라 시점: 캐릭터 뒤쪽 상단
-        const camOffset = new THREE.Vector3(0, 4, 8).applyMatrix4(myModel.matrixWorld);
-        camera.position.lerp(camOffset, 0.1);
-        camera.lookAt(myModel.position.x, myModel.position.y + 1, myModel.position.z);
-        
-        renderer.render(scene, camera);
+        // 카메라 시점 (1인칭처럼 보이기 위해 캐릭터 위치에 카메라 배치)
+        // 카메라를 캐릭터 머리 위치에 놓고, 캐릭터 모델은 투명하게 처리 (혹은 숨김)
+        camera.position.copy(myModel.position);
+        camera.position.y += 1.5; // 캐릭터 눈높이에 맞춤
+        camera.rotation.y = myModel.rotation.y; // 캐릭터의 좌우 회전과 동기화
+
+        if (isVRMode) {
+            // VR 모드일 때 렌더링 방식 변경
+            renderer.setViewport(0, 0, window.innerWidth / 2, window.innerHeight); // 왼쪽 눈
+            renderer.render(scene, camera);
+            renderer.setViewport(window.innerWidth / 2, 0, window.innerWidth / 2, window.innerHeight); // 오른쪽 눈
+            renderer.render(scene, camera); // 동일한 카메라로 렌더링 (간단한 카드보드 흉내)
+        } else {
+            renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+            renderer.render(scene, camera);
+        }
     }
+
+    // 창 크기 변경 시 렌더러와 카메라 업데이트
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        if (isVRMode) {
+            renderer.setSize(window.innerWidth, window.innerHeight); // VR 모드 시 전체 화면 유지
+        }
+    });
+
+    // 모바일 환경 감지
+    if (window.innerWidth <= 768) {
+        document.getElementById('crosshair').style.display = 'none'; // 모바일은 크로스헤어 대신 터치 버튼
+    }
+}
 </script>
 </body>
 </html>
