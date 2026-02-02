@@ -1,156 +1,78 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>PIXEL GTA - REPAIR</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <style>
-        body { margin: 0; background: #000; overflow: hidden; touch-action: none; font-family: sans-serif; }
-        /* 시작 화면 */
-        #start-screen { position: fixed; inset: 0; background: #111; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #0f0; }
-        #start-btn { padding: 20px 50px; font-size: 20px; background: #0f0; color: #000; border: none; cursor: pointer; font-weight: bold; border-radius: 10px; }
-        
-        #ui { position: absolute; inset: 0; pointer-events: none; display: none; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #0f0; font-size: 30px; }
-        
-        /* 조이스틱 */
-        #joystick-zone { position: fixed; bottom: 40px; left: 40px; width: 120px; height: 120px; background: rgba(255,255,255,0.1); border-radius: 50%; pointer-events: all; border: 2px solid #fff; }
-        #joystick-stick { position: absolute; top: 35px; left: 35px; width: 50px; height: 50px; background: #fff; border-radius: 50%; opacity: 0.5; }
-        
-        /* 오른쪽 시점 회전 영역 */
-        #touch-camera-zone { position: fixed; top: 0; right: 0; width: 60%; height: 100%; pointer-events: all; }
-        
-        .action-btn { position: fixed; bottom: 40px; right: 40px; width: 80px; height: 80px; background: rgba(0,255,0,0.3); border: 2px solid #0f0; border-radius: 50%; color: #fff; pointer-events: all; }
-    </style>
-</head>
-<body>
+function createWorld() {
+    // 1. 실제 아스팔트 도로망 생성 (100x100 격자)
+    const worldSize = 500;
+    const planeGeo = new THREE.PlaneGeometry(worldSize, worldSize);
+    const planeMat = new THREE.MeshStandardMaterial({ color: 0x222222 }); // 진한 회색 도로
+    const floor = new THREE.Mesh(planeGeo, planeMat);
+    floor.rotation.x = -Math.PI / 2;
+    scene.add(floor);
 
-<div id="start-screen">
-    <h1>PIXEL GTA</h1>
-    <p>컴퓨터는 클릭, 핸드폰은 버튼을 누르세요</p>
-    <button id="start-btn" onclick="gameStart()">게임 시작</button>
-</div>
+    // 도로 차선 (흰색 점선)
+    const grid = new THREE.GridHelper(worldSize, 20, 0xffffff, 0x444444);
+    grid.position.y = 0.05;
+    scene.add(grid);
 
-<div id="ui">
-    <div id="crosshair">+</div>
-    <div id="joystick-zone"><div id="joystick-stick"></div></div>
-    <div id="touch-camera-zone"></div>
-    <button class="action-btn" onclick="jump()">JUMP</button>
-</div>
-
-<script>
-    let scene, camera, renderer, myModel;
-    let touchX = 0, touchY = 0, vY = 0;
-    let lastTouchX = 0, lastTouchY = 0;
-
-    function gameStart() {
-        document.getElementById('start-screen').style.display = 'none';
-        document.getElementById('ui').style.display = 'block';
-        init3D();
-    }
-
-    function init3D() {
-        scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x87CEEB);
-        scene.fog = new THREE.Fog(0x87CEEB, 1, 150);
-
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.rotation.order = 'YXZ';
-
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
-
-        myModel = new THREE.Group();
-        scene.add(myModel);
-
-        // 환경광
-        scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-
-        // 바닥 & 건물
-        const floor = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({color: 0x444444}));
-        floor.rotation.x = -Math.PI/2;
-        scene.add(floor);
-
-        for(let i=0; i<15; i++) {
-            const h = 10 + Math.random()*20;
-            const b = new THREE.Mesh(new THREE.BoxGeometry(8, h, 8), new THREE.MeshStandardMaterial({color: 0x777777}));
-            b.position.set((Math.random()-0.5)*100, h/2, (Math.random()-0.5)*100);
-            scene.add(b);
+    // 2. 아파트 단지 배치 (구역별로 촘촘하게)
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -2; z <= 2; z++) {
+            if (x === 0 && z === 0) continue; // 중앙은 광장으로 비움
+            spawnComplex(x * 60, z * 60);
         }
-
-        // [PC 시점 조절]
-        document.addEventListener('mousedown', () => {
-            if(!/Android|iPhone/i.test(navigator.userAgent)) {
-                renderer.domElement.requestPointerLock();
-            }
-        });
-        document.addEventListener('mousemove', (e) => {
-            if (document.pointerLockElement === renderer.domElement) {
-                myModel.rotation.y -= e.movementX * 0.003;
-                camera.rotation.x -= e.movementY * 0.003;
-                camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
-            }
-        });
-
-        // [모바일 시점 조절]
-        const cZone = document.getElementById('touch-camera-zone');
-        cZone.addEventListener('touchstart', (e) => {
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
-        });
-        cZone.addEventListener('touchmove', (e) => {
-            const dx = e.touches[0].clientX - lastTouchX;
-            const dy = e.touches[0].clientY - lastTouchY;
-            myModel.rotation.y -= dx * 0.005;
-            camera.rotation.x -= dy * 0.005;
-            camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, camera.rotation.x));
-            lastTouchX = e.touches[0].clientX;
-            lastTouchY = e.touches[0].clientY;
-        });
-
-        // [모바일 조이스틱]
-        const jZone = document.getElementById('joystick-zone');
-        const jStick = document.getElementById('joystick-stick');
-        jZone.addEventListener('touchmove', (e) => {
-            const rect = jZone.getBoundingClientRect();
-            let dx = e.touches[0].clientX - (rect.left + 60);
-            let dy = e.touches[0].clientY - (rect.top + 60);
-            const d = Math.sqrt(dx*dx+dy*dy);
-            if(d > 50) { dx *= 50/d; dy *= 50/d; }
-            jStick.style.transform = `translate(${dx}px, ${dy}px)`;
-            touchX = dx/50; touchY = dy/50;
-        });
-        jZone.addEventListener('touchend', () => {
-            jStick.style.transform = 'translate(0,0)';
-            touchX = 0; touchY = 0;
-        });
-
-        animate();
     }
 
-    function jump() { if(vY === 0) vY = 0.2; }
+    // 3. 광장 및 가로등
+    const plaza = new THREE.Mesh(new THREE.CircleGeometry(20, 32), new THREE.MeshStandardMaterial({color: 0x555555}));
+    plaza.rotation.x = -Math.PI/2;
+    plaza.position.y = 0.1;
+    scene.add(plaza);
+}
 
-    function animate() {
-        requestAnimationFrame(animate);
+function spawnComplex(x, z) {
+    // 한 구역에 아파트 3개씩 배치
+    for(let i=0; i<3; i++) {
+        const offset = i * 15;
+        const height = 20 + Math.random() * 30;
+        createApartment(x + offset, z + offset, height);
+    }
+}
 
-        const dir = new THREE.Vector3();
-        myModel.getWorldDirection(dir);
+function createApartment(x, z, h) {
+    const aptGroup = new THREE.Group();
+
+    // 건물 외골격 (실제 들어갈 수 있게 투명도 조절 또는 구멍 뚫기)
+    const body = new THREE.Mesh(
+        new THREE.BoxGeometry(12, h, 12),
+        new THREE.MeshStandardMaterial({ color: 0x777777, wireframe: false, opacity: 0.9, transparent: true })
+    );
+    body.position.y = h / 2;
+    aptGroup.add(body);
+
+    // 층별 바닥 (내부 탐험용)
+    for (let f = 1; f < h / 4; f++) {
+        const floor = new THREE.Mesh(
+            new THREE.BoxGeometry(11.8, 0.2, 11.8),
+            new THREE.MeshStandardMaterial({ color: 0x444444 })
+        );
+        floor.position.y = f * 4;
+        aptGroup.add(floor);
         
-        // 이동: 조이스틱 아래(-)가 전진이 되도록 보정
-        if (Math.abs(touchY) > 0.1) myModel.position.addScaledVector(dir, -touchY * 0.2);
-
-        // 중력
-        if(myModel.position.y > 0) vY -= 0.01;
-        else { myModel.position.y = 0; vY = Math.max(0, vY); }
-        myModel.position.y += vY;
-
-        camera.position.set(myModel.position.x, myModel.position.y + 1.7, myModel.position.z);
-        camera.rotation.y = myModel.rotation.y;
-
-        renderer.render(scene, camera);
+        // 창문 (빛나는 파란색)
+        const windowGeo = new THREE.PlaneGeometry(1, 1);
+        const windowMat = new THREE.MeshBasicMaterial({color: 0x00ffff});
+        const win = new THREE.Mesh(windowGeo, windowMat);
+        win.position.set(6.1, f * 4 + 1.5, 0);
+        win.rotation.y = Math.PI/2;
+        aptGroup.add(win);
     }
-</script>
-</body>
-</html>
+
+    // 1층 입구 뚫기 (실제 캐릭터가 들어가는 곳)
+    const entrance = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 5, 2),
+        new THREE.MeshBasicMaterial({ color: 0x000000 })
+    );
+    entrance.position.set(0, 2.5, 6.1);
+    aptGroup.add(entrance);
+
+    aptGroup.position.set(x, 0, z);
+    scene.add(aptGroup);
+}
