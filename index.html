@@ -1,77 +1,59 @@
 function createWorld() {
-    // 1. 실제 아스팔트 도로망 생성 (100x100 격자)
-    const worldSize = 500;
-    const planeGeo = new THREE.PlaneGeometry(worldSize, worldSize);
-    const planeMat = new THREE.MeshStandardMaterial({ color: 0x222222 }); // 진한 회색 도로
-    const floor = new THREE.Mesh(planeGeo, planeMat);
+    // 1. 바닥 (어두운 아스팔트)
+    const worldSize = 600;
+    const floor = new THREE.Mesh(
+        new THREE.PlaneGeometry(worldSize, worldSize),
+        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.5 })
+    );
     floor.rotation.x = -Math.PI / 2;
     scene.add(floor);
 
-    // 도로 차선 (흰색 점선)
-    const grid = new THREE.GridHelper(worldSize, 20, 0xffffff, 0x444444);
-    grid.position.y = 0.05;
+    // 2. 화려한 네온 격자 도로
+    const grid = new THREE.GridHelper(worldSize, 30, 0xff00ff, 0x00ffff); // 핑크와 하늘색 네온 라인
+    grid.position.y = 0.1;
     scene.add(grid);
 
-    // 2. 아파트 단지 배치 (구역별로 촘촘하게)
-    for (let x = -2; x <= 2; x++) {
-        for (let z = -2; z <= 2; z++) {
-            if (x === 0 && z === 0) continue; // 중앙은 광장으로 비움
-            spawnComplex(x * 60, z * 60);
+    // 3. 색깔 조명이 있는 아파트 단지 배치
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+    for (let x = -3; x <= 3; x++) {
+        for (let z = -3; z <= 3; z++) {
+            if (x === 0 && z === 0) continue;
+            const randomColor = colors[Math.floor(Math.random() * colors.length)];
+            spawnNeonApt(x * 70, z * 70, randomColor);
         }
     }
-
-    // 3. 광장 및 가로등
-    const plaza = new THREE.Mesh(new THREE.CircleGeometry(20, 32), new THREE.MeshStandardMaterial({color: 0x555555}));
-    plaza.rotation.x = -Math.PI/2;
-    plaza.position.y = 0.1;
-    scene.add(plaza);
 }
 
-function spawnComplex(x, z) {
-    // 한 구역에 아파트 3개씩 배치
-    for(let i=0; i<3; i++) {
-        const offset = i * 15;
-        const height = 20 + Math.random() * 30;
-        createApartment(x + offset, z + offset, height);
-    }
-}
-
-function createApartment(x, z, h) {
+function spawnNeonApt(x, z, neonColor) {
+    const h = 30 + Math.random() * 40;
     const aptGroup = new THREE.Group();
 
-    // 건물 외골격 (실제 들어갈 수 있게 투명도 조절 또는 구멍 뚫기)
+    // 건물 본체
     const body = new THREE.Mesh(
-        new THREE.BoxGeometry(12, h, 12),
-        new THREE.MeshStandardMaterial({ color: 0x777777, wireframe: false, opacity: 0.9, transparent: true })
+        new THREE.BoxGeometry(15, h, 15),
+        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2 })
     );
     body.position.y = h / 2;
     aptGroup.add(body);
 
-    // 층별 바닥 (내부 탐험용)
-    for (let f = 1; f < h / 4; f++) {
-        const floor = new THREE.Mesh(
-            new THREE.BoxGeometry(11.8, 0.2, 11.8),
-            new THREE.MeshStandardMaterial({ color: 0x444444 })
-        );
-        floor.position.y = f * 4;
-        aptGroup.add(floor);
+    // 층별 네온 띠 (건물 외벽에 색깔 등 추가)
+    for (let f = 1; f < h / 5; f++) {
+        const ringGeo = new THREE.BoxGeometry(15.5, 0.5, 15.5);
+        const ringMat = new THREE.MeshBasicMaterial({ color: neonColor });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.y = f * 5;
+        aptGroup.add(ring);
         
-        // 창문 (빛나는 파란색)
-        const windowGeo = new THREE.PlaneGeometry(1, 1);
-        const windowMat = new THREE.MeshBasicMaterial({color: 0x00ffff});
-        const win = new THREE.Mesh(windowGeo, windowMat);
-        win.position.set(6.1, f * 4 + 1.5, 0);
-        win.rotation.y = Math.PI/2;
-        aptGroup.add(win);
+        // 창문에서도 빛이 나오게
+        const winLight = new THREE.PointLight(neonColor, 0.5, 10);
+        winLight.position.set(0, f * 5, 8);
+        aptGroup.add(winLight);
     }
 
-    // 1층 입구 뚫기 (실제 캐릭터가 들어가는 곳)
-    const entrance = new THREE.Mesh(
-        new THREE.BoxGeometry(4, 5, 2),
-        new THREE.MeshBasicMaterial({ color: 0x000000 })
-    );
-    entrance.position.set(0, 2.5, 6.1);
-    aptGroup.add(entrance);
+    // 아파트 꼭대기의 거대한 서치라이트
+    const beacon = new THREE.PointLight(neonColor, 2, 50);
+    beacon.position.y = h + 2;
+    aptGroup.add(beacon);
 
     aptGroup.position.set(x, 0, z);
     scene.add(aptGroup);
