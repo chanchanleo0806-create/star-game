@@ -102,4 +102,165 @@
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
         camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        renderer = new THREE.WebGLRenderer({antialias
+        renderer = new THREE.WebGLRenderer({antialias: true});
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        myModel = createHuman(0x3498db, myId);
+        scene.add(myModel);
+        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        
+        window.addEventListener('mousedown', onAttack);
+        animate();
+    }
+
+    function updateChunks() {
+        const cx = Math.floor(myModel.position.x / CHUNK_SIZE);
+        const cz = Math.floor(myModel.position.z / CHUNK_SIZE);
+        for(let x = cx-1; x <= cx+1; x++) {
+            for(let z = cz-1; z <= cz+1; z++) {
+                const key = `${x},${z}`;
+                if(!chunks[key]) {
+                    const group = new THREE.Group();
+                    const geo = new THREE.PlaneGeometry(CHUNK_SIZE, CHUNK_SIZE, 10, 10);
+                    const pos = geo.attributes.position;
+                    for(let i=0; i<pos.count; i++) {
+                        const px = pos.getX(i) + (x*CHUNK_SIZE);
+                        const pz = pos.getY(i) - (z*CHUNK_SIZE);
+                        pos.setZ(i, Math.sin(px*NOISE_SCALE)*Math.cos(pz*NOISE_SCALE)*HEIGHT_SCALE);
+                    }
+                    geo.computeVertexNormals();
+                    const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({color:0x27ae60, flatShading:true}));
+                    mesh.rotation.x = -Math.PI/2;
+                    group.add(mesh);
+                    group.position.set(x*CHUNK_SIZE, 0, z*CHUNK_SIZE);
+                    
+                    // 광석 추가
+                    spawnOres(group, x, z);
+                    
+                    scene.add(group);
+                    chunks[key] = group;
+                }
+            }
+        }
+    }
+
+    function spawnOres(group, cx, cz) {
+        const types = [{n:'IRON', c:0xaaaaaa}, {n:'DIAMOND', c:0x00ffff}];
+        types.forEach(t => {
+            const ore = new THREE.Mesh(new THREE.BoxGeometry(0.5,0.5,0.5), new THREE.MeshStandardMaterial({color:t.c}));
+            const rx = (Math.random()-0.5)*CHUNK_SIZE;
+            const rz = (Math.random()-0.5)*CHUNK_SIZE;
+            ore.position.set(rx, 1, rz);
+            ore.userData = {type: t.n};
+            group.add(ore);
+            ores.push(ore);
+        });
+    }
+
+    function createHuman(color, name) {
+        const g = new THREE.Group();
+        const b = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.3), new THREE.MeshStandardMaterial({color}));
+        b.position.y = 0.4;
+        const h = new THREE.Mesh(new THREE.BoxGeometry(0.4,0.4,0.4), new THREE.MeshStandardMaterial({color:0xffdbac}));
+        h.position.y = 1.0;
+        g.add(b, h);
+        return g;
+    }
+
+    // --- 자원 & 조합 & 전투 ---
+    function craft(type) {
+        const recipes = {
+            STICK: {WOOD:1},
+            IRON_SWORD: {STICK:1, IRON:2},
+            DIAMOND_SWORD: {STICK:1, DIAMOND:2}
+        };
+        const r = recipes[type];
+        for(let mat in r) if((myData[mat]||0) < r[mat]) return alert("재료부족!");
+        
+        let up = {};
+        for(let mat in r) up[mat] = myData[mat] - r[mat];
+        up.weapon = type;
+        db.ref('users/'+myId).update(up);
+        alert(type + " 제작완료!");
+    }
+
+    function onAttack() {
+        const ray = new THREE.Raycaster();
+        ray.setFromCamera(new THREE.Vector2(0,0), camera);
+        
+        // 광석 채집
+        const hits = ray.intersectObjects(ores);
+        if(hits.length > 0) {
+            const type = hits[0].object.userData.type;
+            db.ref('users/'+myId).transaction(d => {
+                if(d) d[type] = (d[type]||0) + 1;
+                return d;
+            });
+            hits[0].object.visible = false;
+            return;
+        }
+
+        // 유저 공격
+        const pMeshes = Object.values(players);
+        const pInter = ray.intersectObjects(pMeshes, true);
+        if(pInter.length > 0) {
+            let tid = "";
+            for(let id in players) if(players[id] === pInter[0].object.parent) tid = id;
+            if(tid) {
+                const dmg = myData.weapon.includes("DIAMOND") ? 25 : (myData.weapon.includes("IRON") ? 15 : 5);
+                db.ref('live/'+tid+'/hp').transaction(h => (h||100) - dmg);
+            }
+        }
+    }
+
+    function sync() {
+        db.ref('users/'+myId).on('value', s => {
+            myData = s.val();
+            const items = ['WOOD','STONE','IRON','DIAMOND'];
+            items.forEach(i => document.getElementById('inv-'+i).innerText = myData[i]||0);
+            document.getElementById('weapon-txt').innerText = myData.weapon;
+            document.getElementById('money-txt').innerText = myData.money;
+        });
+
+        db.ref('live/'+myId).set({x:0, z:0, hp:100});
+        db.ref('live/'+myId+'/hp').on('value', h => {
+            const hp = h.val() || 100;
+            document.getElementById('hp-txt').innerText = hp;
+            document.getElementById('hp-inner').style.width = hp + "%";
+            if(hp <= 0) { alert("사망!"); location.reload(); }
+        });
+
+        db.ref('live').on('value', s => {
+            const d = s.val();
+            for(let id in d) {
+                if(id === myId) continue;
+                if(!players[id]) { players[id] = createHuman(0xe74c3c, id); scene.add(players[id]); }
+                players[id].position.set(d[id].x, 0, d[id].z);
+            }
+        });
+    }
+
+    // --- 조작 ---
+    window.onkeydown = e => keys[e.code] = true;
+    window.onkeyup = e => keys[e.code] = false;
+
+    function animate() {
+        requestAnimationFrame(animate);
+        let m = false;
+        if(keys['KeyW']) { myModel.position.z -= 0.15; m = true; }
+        if(keys['KeyS']) { myModel.position.z += 0.15; m = true; }
+        if(keys['KeyA']) { myModel.position.x -= 0.15; m = true; }
+        if(keys['KeyD']) { myModel.position.x += 0.15; m = true; }
+
+        if(m) {
+            updateChunks();
+            db.ref('live/'+myId).update({x: myModel.position.x, z: myModel.position.z});
+            camera.position.lerp(new THREE.Vector3(myModel.position.x, 8, myModel.position.z + 12), 0.1);
+            camera.lookAt(myModel.position);
+        }
+        renderer.render(scene, camera);
+    }
+</script>
+</body>
+</html>
