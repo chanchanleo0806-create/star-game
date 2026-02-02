@@ -79,10 +79,50 @@
         const keys = {};
 
         // --- [로그인 및 시작] ---
-        function login() {
-            myId = document.getElementById('uid').value;
-            currentServer = document.getElementById('server-select').value;
-            if(!myId) return alert("닉네임을 입력하세요!");
+        // 1. 회원가입 함수
+function signUp() {
+    const id = document.getElementById('uid').value;
+    const pw = prompt("사용할 비밀번호를 입력하세요:"); // 실제로는 비밀번호 입력창을 만드는 게 좋음
+
+    if(!id || !pw) return alert("아이디와 비밀번호를 모두 입력하세요!");
+
+    // 이미 존재하는 아이디인지 확인
+    db.ref('users/' + id).once('value', (snap) => {
+        if(snap.exists()) {
+            alert("이미 존재하는 닉네임입니다!");
+        } else {
+            // 새 유저 정보 저장 (초기 자금 1000원 추가)
+            db.ref('users/' + id).set({
+                pw: pw,
+                money: 1000,
+                country: "무소속"
+            }).then(() => {
+                alert("회원가입 성공! 이제 로그인을 해주세요.");
+            });
+        }
+    });
+}
+
+// 2. 로그인 함수 (수정본)
+function login() {
+    const id = document.getElementById('uid').value;
+    const pw = prompt("비밀번호를 입력하세요:");
+    currentServer = document.getElementById('server-select').value;
+
+    db.ref('users/' + id).once('value', (snap) => {
+        const userData = snap.val();
+        if(userData && userData.pw === pw) {
+            myId = id;
+            // 게임 화면으로 전환
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('ui-layer').classList.remove('hidden');
+            init3D();
+            syncData();
+        } else {
+            alert("아이디 또는 비밀번호가 틀렸습니다!");
+        }
+    });
+}
 
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('ui-layer').classList.remove('hidden');
@@ -164,3 +204,4 @@
 
         // --- [조작 및 루프] ---
         window.on
+
