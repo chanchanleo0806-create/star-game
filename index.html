@@ -2,45 +2,57 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>스타 메이커: 보셀 월드</title>
+    <title>STAR MAKER: 3D MASTER</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
-        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        body { margin: 0; background: #000; overflow: hidden; font-family: 'Arial', sans-serif; }
         #ui { position: absolute; inset: 0; pointer-events: none; z-index: 10; color: white; }
-        .panel { pointer-events: all; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; margin: 10px; border: 1px solid #444; }
-        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 24px; }
-        button { cursor: pointer; background: #3498db; color: white; border: none; padding: 8px; margin: 2px; border-radius: 4px; font-weight: bold; }
+        .panel { pointer-events: all; background: rgba(0,0,0,0.8); padding: 15px; border-radius: 10px; margin: 10px; border: 2px solid #555; }
+        #crosshair { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #00ff00; font-size: 24px; }
+        button { cursor: pointer; background: #444; color: white; border: 1px solid #777; padding: 10px; border-radius: 5px; }
         .hidden { display: none !important; }
-        #hp-bar { width: 100%; height: 10px; background: #333; margin-top: 5px; }
-        #hp-fill { width: 100%; height: 100%; background: #ff4757; transition: 0.2s; }
+        #hp-bar { width: 100%; height: 10px; background: #333; border-radius: 5px; margin-top: 5px; }
+        #hp-fill { width: 100%; height: 100%; background: #ff4757; border-radius: 5px; transition: 0.3s; }
+        #guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px; }
     </style>
 </head>
 <body>
 
 <div id="login-screen" style="position:fixed; inset:0; background:#1a1a2e; z-index:100; display:flex; align-items:center; justify-content:center;">
-    <div class="panel" style="width:280px; text-align:center; background:white; color:black;">
-        <h2 style="margin-top:0">⛏️ PIXEL WORLD</h2>
-        <input type="text" id="uid" placeholder="아이디" style="width:90%; padding:10px; margin-bottom:5px;">
-        <input type="password" id="upw" placeholder="비밀번호" style="width:90%; padding:10px; margin-bottom:15px;">
-        <button onclick="handleAuth('login')" style="width:45%">로그인</button>
+    <div class="panel" style="width:300px; text-align:center; background:white; color:black;">
+        <h2 style="color:#1a1a2e">⛏️ STAR MAKER 3D</h2>
+        <input type="text" id="uid" placeholder="아이디" style="width:90%; padding:10px; margin-bottom:10px;">
+        <input type="password" id="upw" placeholder="비밀번호" style="width:90%; padding:10px; margin-bottom:20px;">
+        <button onclick="handleAuth('login')" style="width:45%; background:#2ecc71">로그인</button>
         <button onclick="handleAuth('signup')" style="width:45%; background:#9b59b6">가입</button>
     </div>
 </div>
 
 <div id="ui" class="hidden">
+    <div id="guide">화면을 클릭하면 시점이 고정됩니다 (ESC로 해제)</div>
     <div id="crosshair">+</div>
+    
     <div class="panel" style="width: 220px;">
-        <div>👤 <span id="user-txt">-</span></div>
+        <div style="font-size: 1.2em; color: #f1c40f;">💰 <span id="money-txt">0</span> G</div>
         <div id="hp-bar"><div id="hp-fill"></div></div>
-        <div style="font-size:12px; margin-top:5px;">
+        <div style="font-size: 12px; margin-top: 8px;">
             🪵:<span id="inv-WOOD">0</span> 🪨:<span id="inv-STONE">0</span> 💎:<span id="inv-DIAMOND">0</span>
         </div>
+        <div style="margin-top:5px; color:#3498db; font-size:14px;">⚔️ <span id="weapon-txt">맨손</span></div>
     </div>
-    <div class="panel" style="position:fixed; bottom:20px; right:20px;">
-        <button onclick="craft('DIAMOND_SWORD')">💎 다이아 검 제작</button>
-        <button onclick="jump()">Jump (Space)</button>
+
+    <div id="craft-ui" class="panel hidden" style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:250px;">
+        <h3 style="margin:0 0 10px 0">⚒️ 제작대</h3>
+        <button onclick="craft('IRON_SWORD', 500)" style="width:100%; margin-bottom:5px;">철 검 (500G)</button>
+        <button onclick="craft('DIAMOND_SWORD', 2000)" style="width:100%; margin-bottom:5px;">다이아 검 (2000G)</button>
+        <button onclick="toggleCraft()" style="width:100%; background:#e74c3c">닫기</button>
+    </div>
+
+    <div style="position:fixed; bottom:20px; left:20px; pointer-events:all; display:flex; gap:10px;">
+        <button onclick="toggleCraft()" style="background:#e67e22">⚒️ 제작대</button>
+        <button onclick="jump()">🚀 JUMP (Space)</button>
     </div>
 </div>
 
@@ -58,8 +70,10 @@
 
     let myId, myModel, scene, camera, renderer, myData = {};
     let chunks = {}, players = {}, blocks = [];
-    const keys = {}, CHUNK_SIZE = 16, NOISE_SCALE = 0.1, HEIGHT_SCALE = 3;
-    let vY = 0; // 중력/점프 속도
+    const keys = {}, CHUNK_SIZE = 14, NOISE_SCALE = 0.08, HEIGHT_SCALE = 4;
+    let vY = 0, rotY = 0;
+
+    const BIOMES = { WATER: 0x3498db, SAND: 0xf1c40f, GRASS: 0x2ecc71, STONE: 0x7f8c8d, SNOW: 0xffffff };
 
     async function handleAuth(type) {
         const id = document.getElementById('uid').value;
@@ -67,19 +81,18 @@
         const ref = db.ref('users/' + id);
         const snap = await ref.once('value');
         if(type === 'signup') {
-            if(snap.exists()) return alert("중복!");
-            await ref.set({pw, WOOD:0, STONE:0, DIAMOND:0, hp:100, weapon:"맨손"});
-            alert("가입완료");
+            if(snap.exists()) return alert("중복 아이디");
+            await ref.set({pw, WOOD:0, STONE:0, DIAMOND:0, hp:100, weapon:"맨손", money:500});
+            alert("가입 성공!");
         } else {
             if(snap.exists() && snap.val().pw === pw) { myId = id; start(); }
-            else alert("정보불일치");
+            else alert("오류");
         }
     }
 
     function start() {
         document.getElementById('login-screen').classList.add('hidden');
         document.getElementById('ui').classList.remove('hidden');
-        document.getElementById('user-txt').innerText = myId;
         init3D();
         sync();
     }
@@ -93,12 +106,25 @@
         document.body.appendChild(renderer.domElement);
 
         myModel = new THREE.Group();
-        const body = new THREE.Mesh(new THREE.BoxGeometry(0.6,0.8,0.3), new THREE.MeshStandardMaterial({color:0x3498db}));
-        body.position.y = 0.4;
+        const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1, 0.5), new THREE.MeshStandardMaterial({color: 0x3498db}));
+        body.position.y = 1;
         myModel.add(body);
         scene.add(myModel);
 
-        scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+        scene.add(new THREE.DirectionalLight(0xffffff, 1), new THREE.AmbientLight(0xffffff, 0.5));
+        
+        // 마우스 시점 고정 로직
+        renderer.domElement.addEventListener('click', () => {
+            renderer.domElement.requestPointerLock();
+            document.getElementById('guide').style.display = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (document.pointerLockElement === renderer.domElement) {
+                myModel.rotation.y -= e.movementX * 0.003;
+            }
+        });
+
         window.addEventListener('mousedown', onAction);
         animate();
     }
@@ -116,15 +142,14 @@
                     const group = new THREE.Group();
                     for(let lx=0; lx<CHUNK_SIZE; lx++){
                         for(let lz=0; lz<CHUNK_SIZE; lz++){
-                            const wx = x*CHUNK_SIZE + lx;
-                            const wz = z*CHUNK_SIZE + lz;
+                            const wx = x*CHUNK_SIZE + lx, wz = z*CHUNK_SIZE + lz;
                             const h = getTerrainHeight(wx, wz);
-                            const box = new THREE.Mesh(
-                                new THREE.BoxGeometry(1,1,1),
-                                new THREE.MeshStandardMaterial({color: h > 1 ? 0x7f8c8d : 0x27ae60})
-                            );
+                            const box = new THREE.Mesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshStandardMaterial({
+                                color: h < -1 ? BIOMES.WATER : h < 0 ? BIOMES.SAND : h < 2 ? BIOMES.GRASS : h < 4 ? BIOMES.STONE : BIOMES.SNOW,
+                                flatShading: true
+                            }));
                             box.position.set(wx, h - 0.5, wz);
-                            box.userData = {type: h > 1 ? 'STONE' : 'WOOD'};
+                            box.userData = {type: h > 2 ? 'STONE' : 'WOOD'};
                             group.add(box);
                             blocks.push(box);
                         }
@@ -136,35 +161,47 @@
         }
     }
 
-    function jump() { if(vY === 0) vY = 0.2; }
-
     function onAction() {
         const ray = new THREE.Raycaster();
         ray.setFromCamera(new THREE.Vector2(0,0), camera);
         const hits = ray.intersectObjects(blocks);
-        if(hits.length > 0 && hits[0].distance < 5) {
+        if(hits.length > 0 && hits[0].distance < 6) {
             const type = hits[0].object.userData.type;
-            db.ref('users/'+myId+'/'+type).transaction(c => (c||0)+1);
+            db.ref('users/'+myId).transaction(d => {
+                if(d) { d[type] = (d[type]||0)+1; d.money = (d.money||0)+30; }
+                return d;
+            });
             hits[0].object.visible = false;
         }
     }
 
+    function toggleCraft() { document.getElementById('craft-ui').classList.toggle('hidden'); }
+    function craft(item, price) {
+        if(myData.money < price) return alert("돈 부족!");
+        db.ref('users/'+myId).update({ money: myData.money - price, weapon: item });
+        alert(item + " 제작!");
+    }
+    function jump() { if(vY === 0) vY = 0.22; }
+
     function sync() {
         db.ref('users/'+myId).on('value', s => {
-            myData = s.val();
+            myData = s.val() || {};
             ['WOOD','STONE','DIAMOND'].forEach(k => document.getElementById('inv-'+k).innerText = myData[k]||0);
+            document.getElementById('money-txt').innerText = myData.money || 0;
+            document.getElementById('weapon-txt').innerText = myData.weapon || "맨손";
             document.getElementById('hp-fill').style.width = (myData.hp || 100) + "%";
         });
-        db.ref('live/'+myId).set({x:0, z:0, y:0});
+        db.ref('live/'+myId).set({x:0, y:0, z:0, rot:0});
         db.ref('live').on('value', s => {
             const d = s.val();
             for(let id in d) {
                 if(id === myId) continue;
                 if(!players[id]) {
-                    players[id] = new THREE.Mesh(new THREE.BoxGeometry(0.6,1.2,0.3), new THREE.MeshStandardMaterial({color:0xe74c3c}));
+                    players[id] = new THREE.Mesh(new THREE.BoxGeometry(0.5,1,0.5), new THREE.MeshStandardMaterial({color:0xe74c3c}));
                     scene.add(players[id]);
                 }
-                players[id].position.set(d[id].x, d[id].y, d[id].z);
+                players[id].position.set(d[id].x, d[id].y + 0.5, d[id].z);
+                players[id].rotation.y = d[id].rot;
             }
         });
     }
@@ -174,27 +211,32 @@
 
     function animate() {
         requestAnimationFrame(animate);
-        let speed = 0.15;
-        if(keys['KeyW']) myModel.position.z -= speed;
-        if(keys['KeyS']) myModel.position.z += speed;
-        if(keys['KeyA']) myModel.position.x -= speed;
-        if(keys['KeyD']) myModel.position.x += speed;
+        
+        // 방향 기반 이동
+        const moveSpeed = 0.15;
+        const dir = new THREE.Vector3();
+        myModel.getWorldDirection(dir);
+        
+        if(keys['KeyW']) myModel.position.addScaledVector(dir, moveSpeed);
+        if(keys['KeyS']) myModel.position.addScaledVector(dir, -moveSpeed);
+        
+        const sideDir = new THREE.Vector3().crossVectors(new THREE.Vector3(0,1,0), dir);
+        if(keys['KeyA']) myModel.position.addScaledVector(sideDir, moveSpeed);
+        if(keys['KeyD']) myModel.position.addScaledVector(sideDir, -moveSpeed);
 
-        // 중력 및 지형 충돌
         const groundY = getTerrainHeight(myModel.position.x, myModel.position.z);
-        if(myModel.position.y > groundY) {
-            vY -= 0.01; // 중력
-        } else {
-            myModel.position.y = groundY;
-            vY = Math.max(0, vY);
-        }
+        if(myModel.position.y > groundY) vY -= 0.012;
+        else { myModel.position.y = groundY; vY = Math.max(0, vY); }
         myModel.position.y += vY;
 
         updateChunks();
-        db.ref('live/'+myId).update({x: myModel.position.x, y: myModel.position.y, z: myModel.position.z});
+        db.ref('live/'+myId).update({x: myModel.position.x, y: myModel.position.y, z: myModel.position.z, rot: myModel.rotation.y});
         
-        camera.position.lerp(new THREE.Vector3(myModel.position.x, myModel.position.y + 5, myModel.position.z + 8), 0.1);
-        camera.lookAt(myModel.position);
+        // 카메라 시점: 캐릭터 뒤쪽 상단
+        const camOffset = new THREE.Vector3(0, 4, 8).applyMatrix4(myModel.matrixWorld);
+        camera.position.lerp(camOffset, 0.1);
+        camera.lookAt(myModel.position.x, myModel.position.y + 1, myModel.position.z);
+        
         renderer.render(scene, camera);
     }
 </script>
