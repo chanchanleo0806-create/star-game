@@ -1,60 +1,29 @@
-function createWorld() {
-    // 1. 바닥 (어두운 아스팔트)
-    const worldSize = 600;
-    const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(worldSize, worldSize),
-        new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.1, metalness: 0.5 })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    scene.add(floor);
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>CYBER CITY MASTER</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="viewport"></div>
+    
+    <div id="phone-container">
+        <div id="phone-trigger" onclick="togglePhone()">📱</div>
+        <div id="phone-screen">
+            <h3>CYBER OS</h3>
+            <div id="balance-info">현금: <span id="w-val">0</span></div>
+            <button onclick="openBank()">은행앱</button>
+        </div>
+    </div>
 
-    // 2. 화려한 네온 격자 도로
-    const grid = new THREE.GridHelper(worldSize, 30, 0xff00ff, 0x00ffff); // 핑크와 하늘색 네온 라인
-    grid.position.y = 0.1;
-    scene.add(grid);
-
-    // 3. 색깔 조명이 있는 아파트 단지 배치
-    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
-    for (let x = -3; x <= 3; x++) {
-        for (let z = -3; z <= 3; z++) {
-            if (x === 0 && z === 0) continue;
-            const randomColor = colors[Math.floor(Math.random() * colors.length)];
-            spawnNeonApt(x * 70, z * 70, randomColor);
-        }
-    }
-}
-
-function spawnNeonApt(x, z, neonColor) {
-    const h = 30 + Math.random() * 40;
-    const aptGroup = new THREE.Group();
-
-    // 건물 본체
-    const body = new THREE.Mesh(
-        new THREE.BoxGeometry(15, h, 15),
-        new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.2 })
-    );
-    body.position.y = h / 2;
-    aptGroup.add(body);
-
-    // 층별 네온 띠 (건물 외벽에 색깔 등 추가)
-    for (let f = 1; f < h / 5; f++) {
-        const ringGeo = new THREE.BoxGeometry(15.5, 0.5, 15.5);
-        const ringMat = new THREE.MeshBasicMaterial({ color: neonColor });
-        const ring = new THREE.Mesh(ringGeo, ringMat);
-        ring.position.y = f * 5;
-        aptGroup.add(ring);
-        
-        // 창문에서도 빛이 나오게
-        const winLight = new THREE.PointLight(neonColor, 0.5, 10);
-        winLight.position.set(0, f * 5, 8);
-        aptGroup.add(winLight);
-    }
-
-    // 아파트 꼭대기의 거대한 서치라이트
-    const beacon = new THREE.PointLight(neonColor, 2, 50);
-    beacon.position.y = h + 2;
-    aptGroup.add(beacon);
-
-    aptGroup.position.set(x, 0, z);
-    scene.add(aptGroup);
-}
+    <script type="importmap">
+    { "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/database": "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js"
+    }}
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
