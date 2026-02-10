@@ -1,0 +1,11 @@
+body { margin: 0; background: #000; overflow: hidden; }
+#phone-container {
+    position: fixed; right: -250px; top: 10%; width: 240px; height: 450px;
+    background: #111; border: 3px solid #38bdf8; border-radius: 20px;
+    transition: 0.5s; z-index: 100; color: white; padding: 10px;
+}
+#phone-container.active { right: 10px; }
+#phone-trigger {
+    position: absolute; left: -50px; top: 40%; width: 50px; height: 80px;
+    background: #38bdf8; border-radius: 10px 0 0 10px; cursor: pointer;
+}
